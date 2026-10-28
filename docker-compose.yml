@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: aventura360-postgres
+    environment:
+      POSTGRES_DB: aventura360
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - aventura360_postgres_data:/var/lib/postgresql
+
+volumes:
+  aventura360_postgres_data:
