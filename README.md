@@ -137,3 +137,82 @@ ejercitan el endpoint por HTTP y eliminan ese esquema al finalizar. No escriben
 en las tablas de `public`. Cubren los cuatro subtipos, datos invalidos, ocasiones
 inexistentes, nombres repetidos y rollback ante fallos reales de restricciones
 del subtipo y de las asociaciones, incluyendo la reutilizacion del cliente.
+
+## Registro de variedades: HU-26
+
+### Base de datos
+
+Requiere haber aplicado antes `001_hu19_productos.sql`. Con PostgreSQL iniciado
+(`docker compose up -d postgres`), ejecutar **una sola vez** desde la raíz del repositorio:
+
+```powershell
+Get-Content -Raw backend/src/db/sql/002_hu26_variedades.sql | docker compose exec -T postgres psql -U postgres -d aventura360 -v ON_ERROR_STOP=1
+```
+
+El script es transaccional: si falla, no se aplica nada.
+
+La tabla `variedad` tiene `id_variedad`, `id_producto` (clave foránea a `producto`),
+`color`, `medida`, `tamano_capacidad`, `stock` y `stock_minimo`. El stock pertenece a la
+variedad, no al producto. No hay SKU, precio, imágenes ni estado activo.
+
+PostgreSQL garantiza que `stock` y `stock_minimo` sean enteros mayores o iguales a 0,
+que al menos una característica esté informada, que ningún texto sea vacío y que no se
+repita una variedad del mismo producto. El índice único `variedad_producto_caracteristicas_uq`
+compara las características sin distinguir mayúsculas y sin espacios en los extremos, y
+trata `NULL` como un valor más (por ejemplo, dos variedades solo con `color = "Rojo"`
+son duplicadas).
+
+### POST /api/variedades
+
+Enviar `Content-Type: application/json`:
+
+```json
+{
+  "id_producto": 1,
+  "color": "Rojo",
+  "medida": "M",
+  "tamano_capacidad": "30 L",
+  "stock": 10,
+  "stock_minimo": 2
+}
+```
+
+- `id_producto`, `stock` y `stock_minimo` son obligatorios y deben ser enteros JSON
+  (no texto). `id_producto` positivo; `stock` y `stock_minimo` mayores o iguales a 0.
+- `color`, `medida` y `tamano_capacidad` son opcionales individualmente y se pueden
+  combinar, pero debe informarse al menos uno. Se pueden omitir o enviar como `null`;
+  un texto vacío o solo con espacios es inválido.
+- Los textos se guardan sin espacios en los extremos y con los espacios internos
+  repetidos reducidos a uno. Se conservan las mayúsculas originales.
+- Se rechazan los campos adicionales (por ejemplo `precio`, `activo`, `sku` o `id_variedad`).
+- El producto debe existir y estar activo.
+
+| Código | Cuándo | Cuerpo |
+| --- | --- | --- |
+| `201` | Variedad registrada | La fila creada, con todos sus campos |
+| `400` | Datos inválidos, JSON mal formado, producto inactivo o variedad duplicada | `{ "errores": ["mensaje"] }` |
+| `404` | El producto no existe | `{ "errores": ["El producto indicado no existe."] }` |
+| `500` | Error interno | `{ "error": "No se pudo registrar la variedad." }` |
+
+La verificación del producto y la inserción usan una única transacción y un mismo
+cliente; ante cualquier fallo se hace `ROLLBACK` y el cliente se libera. El producto
+se bloquea con `FOR SHARE` mientras se registra la variedad.
+
+### Probar con Postman
+
+1. Tener `001` y `002` aplicados y el backend en marcha (`npm run dev` en `backend`).
+2. Registrar antes un producto con HU-19 (`POST /api/productos`) y anotar su
+   `id_producto`, o consultar `SELECT id_producto, nombre, activo FROM producto;`.
+3. Enviar `POST http://localhost:3001/api/variedades` con el cuerpo de ejemplo
+   (Body → raw → JSON) usando ese `id_producto`.
+4. Comprobar `201`. Repetir el mismo envío (también cambiando mayúsculas o espacios):
+   debe responder `400` por duplicada. Con otro `id_producto` inexistente: `404`.
+
+### Pruebas automáticas
+
+`npm test` desde `backend` ejecuta también `test/variedades.test.js`, que crea un
+esquema aislado con nombre aleatorio, carga `001` y `002`, ejercita el endpoint por
+HTTP y elimina el esquema. No necesita Cloudinary. Cubren el validador, el alta
+correcta, las combinaciones de características, el stock por variedad, producto
+inexistente e inactivo, duplicados (mayúsculas, espacios y `NULL`), las restricciones
+propias de la base de datos y el rollback con reutilización del cliente.
