@@ -1,0 +1,183 @@
+.admin-container {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 16px 12px;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #1f2937;
+    box-sizing: border-box;
+}
+
+.admin-header {
+    margin-bottom: 20px;
+}
+
+.badge-admin {
+    display: inline-block;
+    background-color: #065f46;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+}
+
+.admin-header h1 {
+    font-size: 1.5rem;
+    margin: 4px 0 8px 0;
+}
+
+.admin-header p {
+    color: #4b5563;
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+.card-panel {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.card-panel h2 {
+    font-size: 1.2rem;
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.compra-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+}
+
+.btn-guardar {
+    background-color: #047857;
+    color: #ffffff;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-guardar:hover {
+    background-color: #065f46;
+}
+
+.alerta {
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    font-size: 0.9rem;
+}
+
+.alerta-exito {
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+}
+
+.alerta-error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+.lista-compras {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.item-compra {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    background-color: #f9fafb;
+}
+
+.item-compra-top {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.estado-badge {
+    font-size: 0.72rem;
+    background-color: #fef3c7;
+    color: #92400e;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+.item-compra-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.88rem;
+    color: #374151;
+}
+
+.item-obs {
+    margin: 8px 0 0 0;
+    font-size: 0.82rem;
+    color: #6b7280;
+    font-style: italic;
+}
+
+/* Adaptación para tablets y escritorio (mantiene soporte desde 360px en móvil) */
+@media (min-width: 768px) {
+    .admin-container {
+        padding: 28px 24px;
+    }
+
+    .admin-grid {
+        grid-template-columns: 1.1fr 0.9fr;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr 1fr;
+    }
+}
