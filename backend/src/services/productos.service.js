@@ -551,6 +551,34 @@ async function darDeBajaProducto(pool, idProducto) {
     }
 }
 
+function calcularEstadoStock(producto) {
+    if (
+        producto.cantidad_variedades === 0 ||
+        producto.variedades_con_stock === 0
+    ) {
+        return "sin_stock";
+    }
+
+    if (producto.variedades_stock_bajo > 0) {
+        return "stock_bajo";
+    }
+
+    return "disponible";
+}
+
+function resumirProducto(producto) {
+    return {
+        id_producto: producto.id_producto,
+        nombre: producto.nombre,
+        marca: producto.marca,
+        precio: producto.precio,
+        imagen_principal:
+            producto.imagen_principal,
+        estado_stock:
+            calcularEstadoStock(producto),
+    };
+}
+
 async function obtenerCatalogo(pool) {
     const { rows } = await pool.query(
         `SELECT
@@ -559,7 +587,8 @@ async function obtenerCatalogo(pool) {
             p.marca,
             p.precio,
             i.url AS imagen_principal,
-            COUNT(v.id_variedad)::INTEGER AS cantidad_variedades,
+            COUNT(v.id_variedad)::INTEGER
+                AS cantidad_variedades,
             COUNT(v.id_variedad) FILTER (
                 WHERE v.stock > 0
             )::INTEGER AS variedades_con_stock,
@@ -583,30 +612,201 @@ async function obtenerCatalogo(pool) {
          ORDER BY p.id_producto`
     );
 
-    return rows.map((producto) => {
-        let estadoStock = "disponible";
+    return rows.map(resumirProducto);
+}
 
-        if (
-            producto.cantidad_variedades === 0 ||
-            producto.variedades_con_stock === 0
-        ) {
-            estadoStock = "sin_stock";
-        } else if (
-            producto.variedades_stock_bajo > 0
-        ) {
-            estadoStock = "stock_bajo";
-        }
+function normalizarBusqueda(valor) {
+    return String(valor ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+}
 
-        return {
-            id_producto: producto.id_producto,
-            nombre: producto.nombre,
-            marca: producto.marca,
-            precio: producto.precio,
-            imagen_principal:
-                producto.imagen_principal,
-            estado_stock: estadoStock,
-        };
-    });
+async function buscarProductos(pool, criterio) {
+    const busqueda = normalizarBusqueda(criterio);
+
+    if (!busqueda) {
+        return obtenerCatalogo(pool);
+    }
+
+    const palabras = busqueda.split(" ");
+
+    const { rows } = await pool.query(
+        `SELECT
+            p.id_producto,
+            p.nombre,
+            p.descripcion,
+            p.marca,
+            p.precio,
+            i.url AS imagen_principal,
+
+            CASE
+                WHEN c.id_producto IS NOT NULL
+                    THEN 'carpa'
+                WHEN m.id_producto IS NOT NULL
+                    THEN 'mochila'
+                WHEN t.id_producto IS NOT NULL
+                    THEN 'termo'
+                WHEN a.id_producto IS NOT NULL
+                    THEN 'accesorio'
+                ELSE ''
+            END AS tipo,
+
+            COALESCE(
+                (
+                    SELECT string_agg(
+                        DISTINCT o.nombre,
+                        ' '
+                    )
+                    FROM producto_ocasion po
+                    JOIN ocasion o
+                        ON o.id_ocasion =
+                           po.id_ocasion
+                    WHERE po.id_producto =
+                          p.id_producto
+                ),
+                ''
+            ) AS ocasiones_texto,
+
+            COALESCE(
+                (
+                    SELECT string_agg(
+                        concat_ws(
+                            ' ',
+                            v2.color,
+                            v2.medida,
+                            v2.tamano_capacidad
+                        ),
+                        ' '
+                    )
+                    FROM variedad v2
+                    WHERE v2.id_producto =
+                          p.id_producto
+                ),
+                ''
+            ) AS variedades_texto,
+
+            COUNT(v.id_variedad)::INTEGER
+                AS cantidad_variedades,
+
+            COUNT(v.id_variedad) FILTER (
+                WHERE v.stock > 0
+            )::INTEGER
+                AS variedades_con_stock,
+
+            COUNT(v.id_variedad) FILTER (
+                WHERE v.stock > 0
+                  AND v.stock <= v.stock_minimo
+            )::INTEGER
+                AS variedades_stock_bajo
+
+         FROM producto p
+
+         LEFT JOIN imagen i
+            ON i.id_producto = p.id_producto
+           AND i.principal = TRUE
+
+         LEFT JOIN variedad v
+            ON v.id_producto = p.id_producto
+
+         LEFT JOIN carpa c
+            ON c.id_producto = p.id_producto
+
+         LEFT JOIN mochila m
+            ON m.id_producto = p.id_producto
+
+         LEFT JOIN termo t
+            ON t.id_producto = p.id_producto
+
+         LEFT JOIN accesorio a
+            ON a.id_producto = p.id_producto
+
+         WHERE p.activo = TRUE
+
+         GROUP BY
+            p.id_producto,
+            p.nombre,
+            p.descripcion,
+            p.marca,
+            p.precio,
+            i.url,
+            c.id_producto,
+            m.id_producto,
+            t.id_producto,
+            a.id_producto
+
+         ORDER BY p.id_producto`
+    );
+
+    const resultados = rows
+        .map((producto) => {
+            const campos = [
+                producto.nombre,
+                producto.descripcion,
+                producto.marca,
+                producto.tipo,
+                producto.ocasiones_texto,
+                producto.variedades_texto,
+            ].map(normalizarBusqueda);
+
+            const textoCompleto =
+                campos.join(" ");
+
+            const coincidenciaExacta =
+                campos.some(
+                    (campo) =>
+                        campo === busqueda
+                );
+
+            const palabrasCoincidentes =
+                palabras.filter(
+                    (palabra) =>
+                        textoCompleto.includes(
+                            palabra
+                        )
+                ).length;
+
+            return {
+                producto,
+                coincidenciaExacta,
+                palabrasCoincidentes,
+            };
+        })
+        .filter(
+            (resultado) =>
+                resultado.coincidenciaExacta ||
+                resultado.palabrasCoincidentes > 0
+        )
+        .sort((a, b) => {
+            if (
+                a.coincidenciaExacta !==
+                b.coincidenciaExacta
+            ) {
+                return a.coincidenciaExacta
+                    ? -1
+                    : 1;
+            }
+
+            if (
+                a.palabrasCoincidentes !==
+                b.palabrasCoincidentes
+            ) {
+                return (
+                    b.palabrasCoincidentes -
+                    a.palabrasCoincidentes
+                );
+            }
+
+            return (
+                a.producto.id_producto -
+                b.producto.id_producto
+            );
+        });
+
+    return resultados.map(
+        (resultado) =>
+            resumirProducto(resultado.producto)
+    );
 }
 
 module.exports = {
@@ -615,4 +815,5 @@ module.exports = {
     modificarProducto,
     darDeBajaProducto,
     obtenerCatalogo,
+    buscarProductos,
 };
