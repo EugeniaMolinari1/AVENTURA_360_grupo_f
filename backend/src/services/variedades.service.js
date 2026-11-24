@@ -1,4 +1,5 @@
 const CODIGO_VIOLACION_UNICA = "23505";
+
 const INDICE_DUPLICADOS =
     "variedad_producto_caracteristicas_uq";
 
@@ -14,8 +15,6 @@ async function registrarVariedad(pool, datos) {
     try {
         await cliente.query("BEGIN");
 
-        // FOR SHARE impide que el producto se elimine
-        // o desactive mientras se registra la variedad.
         const {
             rows: [producto],
         } = await cliente.query(
@@ -106,20 +105,21 @@ async function consultarStockPorProducto(
         );
     }
 
-    const { rows: variedades } = await pool.query(
-        `SELECT
-            id_variedad,
-            id_producto,
-            color,
-            medida,
-            tamano_capacidad,
-            stock,
-            stock_minimo
-         FROM variedad
-         WHERE id_producto = $1
-         ORDER BY id_variedad`,
-        [idProducto]
-    );
+    const { rows: variedades } =
+        await pool.query(
+            `SELECT
+                id_variedad,
+                id_producto,
+                color,
+                medida,
+                tamano_capacidad,
+                stock,
+                stock_minimo
+             FROM variedad
+             WHERE id_producto = $1
+             ORDER BY id_variedad`,
+            [idProducto]
+        );
 
     return {
         id_producto: producto.id_producto,
@@ -129,7 +129,56 @@ async function consultarStockPorProducto(
     };
 }
 
+async function gestionarStock(
+    pool,
+    idVariedad,
+    nuevoStock
+) {
+    const {
+        rows: [variedad],
+    } = await pool.query(
+        `UPDATE variedad
+         SET stock = $2
+         WHERE id_variedad = $1
+         RETURNING
+            id_variedad,
+            id_producto,
+            color,
+            medida,
+            tamano_capacidad,
+            stock,
+            stock_minimo`,
+        [
+            idVariedad,
+            nuevoStock,
+        ]
+    );
+
+    if (!variedad) {
+        throw errorNegocio(
+            "La variedad indicada no existe.",
+            404
+        );
+    }
+
+    let estadoStock = "disponible";
+
+    if (variedad.stock === 0) {
+        estadoStock = "sin_stock";
+    } else if (
+        variedad.stock <= variedad.stock_minimo
+    ) {
+        estadoStock = "stock_bajo";
+    }
+
+    return {
+        ...variedad,
+        estado_stock: estadoStock,
+    };
+}
+
 module.exports = {
     registrarVariedad,
     consultarStockPorProducto,
+    gestionarStock,
 };

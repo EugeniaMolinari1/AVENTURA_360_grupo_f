@@ -3,6 +3,7 @@ const { Router } = require("express");
 const {
     crearRegistrarVariedad,
     crearConsultarStockPorProducto,
+    crearGestionarStock,
 } = require("../controllers/variedades.controller");
 
 function crearRutasVariedades(pool) {
@@ -19,6 +20,12 @@ function crearRutasVariedades(pool) {
     router.get(
         "/producto/:id/stock",
         crearConsultarStockPorProducto(pool)
+    );
+
+    // HU-23 - Gestionar stock de una variedad.
+    router.patch(
+        "/:id/stock",
+        crearGestionarStock(pool)
     );
 
     return router;
