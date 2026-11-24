@@ -1,10 +1,13 @@
 const { Router } = require("express");
+
 const {
     crearRegistrarProducto,
     crearObtenerProducto,
     crearModificarProducto,
     crearDarDeBajaProducto,
+    crearObtenerCatalogo,
 } = require("../controllers/productos.controller");
+
 const upload = require("../middlewares/upload.middleware");
 
 function crearRutasProductos(pool, servicioImagenes) {
@@ -17,7 +20,14 @@ function crearRutasProductos(pool, servicioImagenes) {
         crearRegistrarProducto(pool, servicioImagenes)
     );
 
-    // HU-20 - Obtener producto para cargar sus datos en la modificación
+    // HU-01 - Navegar catalogo
+    router.get(
+        "/",
+        crearObtenerCatalogo(pool)
+    );
+
+    // HU-20 - Obtener producto para cargar sus datos
+    // en la modificacion
     router.get(
         "/:id",
         crearObtenerProducto(pool)

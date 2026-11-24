@@ -9,6 +9,7 @@ const {
     obtenerProductoPorId,
     modificarProducto,
     darDeBajaProducto,
+    obtenerCatalogo,
 } = require("../services/productos.service");
 
 const imagenesService = require("../services/imagenes.service");
@@ -306,7 +307,8 @@ function crearDarDeBajaProducto(pool) {
             );
 
             return res.json({
-                mensaje: "Producto dado de baja correctamente.",
+                mensaje:
+                    "Producto dado de baja correctamente.",
                 producto,
             });
         } catch (error) {
@@ -332,9 +334,30 @@ function crearDarDeBajaProducto(pool) {
     };
 }
 
+function crearObtenerCatalogo(pool) {
+    return async (req, res) => {
+        try {
+            const productos = await obtenerCatalogo(pool);
+
+            return res.json(productos);
+        } catch (error) {
+            console.error(
+                "Error al obtener catalogo:",
+                error
+            );
+
+            return res.status(500).json({
+                error:
+                    "No se pudo obtener el catalogo.",
+            });
+        }
+    };
+}
+
 module.exports = {
     crearRegistrarProducto,
     crearObtenerProducto,
     crearModificarProducto,
     crearDarDeBajaProducto,
+    crearObtenerCatalogo,
 };
