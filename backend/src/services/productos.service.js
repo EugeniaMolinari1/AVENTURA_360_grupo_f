@@ -551,9 +551,68 @@ async function darDeBajaProducto(pool, idProducto) {
     }
 }
 
+async function obtenerCatalogo(pool) {
+    const { rows } = await pool.query(
+        `SELECT
+            p.id_producto,
+            p.nombre,
+            p.marca,
+            p.precio,
+            i.url AS imagen_principal,
+            COUNT(v.id_variedad)::INTEGER AS cantidad_variedades,
+            COUNT(v.id_variedad) FILTER (
+                WHERE v.stock > 0
+            )::INTEGER AS variedades_con_stock,
+            COUNT(v.id_variedad) FILTER (
+                WHERE v.stock > 0
+                  AND v.stock <= v.stock_minimo
+            )::INTEGER AS variedades_stock_bajo
+         FROM producto p
+         LEFT JOIN imagen i
+            ON i.id_producto = p.id_producto
+           AND i.principal = TRUE
+         LEFT JOIN variedad v
+            ON v.id_producto = p.id_producto
+         WHERE p.activo = TRUE
+         GROUP BY
+            p.id_producto,
+            p.nombre,
+            p.marca,
+            p.precio,
+            i.url
+         ORDER BY p.id_producto`
+    );
+
+    return rows.map((producto) => {
+        let estadoStock = "disponible";
+
+        if (
+            producto.cantidad_variedades === 0 ||
+            producto.variedades_con_stock === 0
+        ) {
+            estadoStock = "sin_stock";
+        } else if (
+            producto.variedades_stock_bajo > 0
+        ) {
+            estadoStock = "stock_bajo";
+        }
+
+        return {
+            id_producto: producto.id_producto,
+            nombre: producto.nombre,
+            marca: producto.marca,
+            precio: producto.precio,
+            imagen_principal:
+                producto.imagen_principal,
+            estado_stock: estadoStock,
+        };
+    });
+}
+
 module.exports = {
     registrarProducto,
     obtenerProductoPorId,
     modificarProducto,
     darDeBajaProducto,
+    obtenerCatalogo,
 };
