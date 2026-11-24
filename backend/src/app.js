@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const defaultPool = require("./db/database");
 const { crearRutasProductos } = require("./routes/productos.routes");
+const { crearRutasVariedades } = require("./routes/variedades.routes");
 
 function crearApp(pool = defaultPool, servicioImagenes) {
     const app = express();
@@ -11,7 +12,8 @@ function crearApp(pool = defaultPool, servicioImagenes) {
     app.use(cors());
     app.use(express.json());
     app.use("/api/productos", crearRutasProductos(pool, servicioImagenes));
-    app.use("/api/productos", (error, req, res, next) => {
+    app.use("/api/variedades", crearRutasVariedades(pool));
+    app.use(["/api/productos", "/api/variedades"], (error, req, res, next) => {
         if (error.type === "entity.parse.failed") {
             return res.status(400).json({ errores: ["El cuerpo debe ser JSON valido."] });
         }
