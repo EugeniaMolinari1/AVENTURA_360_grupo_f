@@ -11,6 +11,7 @@ const {
     darDeBajaProducto,
     obtenerCatalogo,
     buscarProductos,
+    obtenerDetalleProducto,
 } = require("../services/productos.service");
 
 const imagenesService =
@@ -477,6 +478,55 @@ function crearBuscarProductos(pool) {
     };
 }
 
+function crearObtenerDetalleProducto(pool) {
+    return async (req, res) => {
+        try {
+            const idProducto =
+                validarIdProducto(
+                    req.params.id
+                );
+
+            if (!idProducto) {
+                return res
+                    .status(400)
+                    .json({
+                        errores: [
+                            "El identificador del producto no es valido.",
+                        ],
+                    });
+            }
+
+            const producto =
+                await obtenerDetalleProducto(
+                    pool,
+                    idProducto
+                );
+
+            if (!producto) {
+                return res
+                    .status(404)
+                    .json({
+                        error:
+                            "Producto no encontrado o no disponible.",
+                    });
+            }
+
+            return res.json(producto);
+        } catch (error) {
+            console.error(
+                "Error al obtener detalle del producto:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    error:
+                        "No se pudo obtener el detalle del producto.",
+                });
+        }
+    };
+}
 module.exports = {
     crearRegistrarProducto,
     crearObtenerProducto,
@@ -484,4 +534,5 @@ module.exports = {
     crearDarDeBajaProducto,
     crearObtenerCatalogo,
     crearBuscarProductos,
+    crearObtenerDetalleProducto,
 };
