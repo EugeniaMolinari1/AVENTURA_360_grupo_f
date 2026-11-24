@@ -5,20 +5,33 @@ const cors = require("cors");
 const defaultPool = require("./db/database");
 const { crearRutasProductos } = require("./routes/productos.routes");
 const { crearRutasVariedades } = require("./routes/variedades.routes");
+const comprasProveedoresRoutes = require("./routes/comprasProveedores.routes");
 
 function crearApp(pool = defaultPool, servicioImagenes) {
     const app = express();
 
     app.use(cors());
     app.use(express.json());
+
+    // HU-19 - Registrar producto
     app.use("/api/productos", crearRutasProductos(pool, servicioImagenes));
+
+    // HU-26 - Registrar variedad
     app.use("/api/variedades", crearRutasVariedades(pool));
+
+    // Manejo de errores JSON para productos y variedades
     app.use(["/api/productos", "/api/variedades"], (error, req, res, next) => {
         if (error.type === "entity.parse.failed") {
-            return res.status(400).json({ errores: ["El cuerpo debe ser JSON valido."] });
+            return res.status(400).json({
+                errores: ["El cuerpo debe ser JSON valido."],
+            });
         }
+
         next(error);
     });
+
+    // HU-28 - Registrar compra a proveedor
+    app.use("/api", comprasProveedoresRoutes);
 
     // Verifica que el backend esté funcionando
     app.get("/api/health", (req, res) => {
