@@ -8,6 +8,7 @@ const {
     registrarProducto,
     obtenerProductoPorId,
     modificarProducto,
+    darDeBajaProducto,
 } = require("../services/productos.service");
 
 const imagenesService = require("../services/imagenes.service");
@@ -284,8 +285,56 @@ function crearModificarProducto(
     };
 }
 
+function crearDarDeBajaProducto(pool) {
+    return async (req, res) => {
+        try {
+            const idProducto = validarIdProducto(
+                req.params.id
+            );
+
+            if (!idProducto) {
+                return res.status(400).json({
+                    errores: [
+                        "El identificador del producto no es valido.",
+                    ],
+                });
+            }
+
+            const producto = await darDeBajaProducto(
+                pool,
+                idProducto
+            );
+
+            return res.json({
+                mensaje: "Producto dado de baja correctamente.",
+                producto,
+            });
+        } catch (error) {
+            if (
+                error.status === 400 ||
+                error.status === 404
+            ) {
+                return res.status(error.status).json({
+                    errores: [error.message],
+                });
+            }
+
+            console.error(
+                "Error al dar de baja producto:",
+                error
+            );
+
+            return res.status(500).json({
+                error:
+                    "No se pudo dar de baja el producto.",
+            });
+        }
+    };
+}
+
 module.exports = {
     crearRegistrarProducto,
     crearObtenerProducto,
     crearModificarProducto,
+    crearDarDeBajaProducto,
 };

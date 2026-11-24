@@ -445,7 +445,11 @@ async function modificarProducto(
             [idProducto]
         );
 
-        for (let i = 0; i < imagenesNuevas.length; i += 1) {
+        for (
+            let i = 0;
+            i < imagenesNuevas.length;
+            i += 1
+        ) {
             const imagen = imagenesNuevas[i];
 
             await cliente.query(
@@ -496,8 +500,60 @@ async function modificarProducto(
     }
 }
 
+async function darDeBajaProducto(pool, idProducto) {
+    const cliente = await pool.connect();
+
+    try {
+        await cliente.query("BEGIN");
+
+        const productoExistente = await cliente.query(
+            `SELECT *
+             FROM producto
+             WHERE id_producto = $1
+             FOR UPDATE`,
+            [idProducto]
+        );
+
+        if (productoExistente.rowCount === 0) {
+            const error = new Error(
+                "Producto no encontrado."
+            );
+            error.status = 404;
+            throw error;
+        }
+
+        if (!productoExistente.rows[0].activo) {
+            const error = new Error(
+                "El producto ya se encuentra dado de baja."
+            );
+            error.status = 400;
+            throw error;
+        }
+
+        const {
+            rows: [producto],
+        } = await cliente.query(
+            `UPDATE producto
+             SET activo = FALSE
+             WHERE id_producto = $1
+             RETURNING *`,
+            [idProducto]
+        );
+
+        await cliente.query("COMMIT");
+
+        return producto;
+    } catch (error) {
+        await cliente.query("ROLLBACK");
+        throw error;
+    } finally {
+        cliente.release();
+    }
+}
+
 module.exports = {
     registrarProducto,
     obtenerProductoPorId,
     modificarProducto,
+    darDeBajaProducto,
 };

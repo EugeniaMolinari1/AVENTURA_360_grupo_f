@@ -3,6 +3,7 @@ const {
     crearRegistrarProducto,
     crearObtenerProducto,
     crearModificarProducto,
+    crearDarDeBajaProducto,
 } = require("../controllers/productos.controller");
 const upload = require("../middlewares/upload.middleware");
 
@@ -27,6 +28,12 @@ function crearRutasProductos(pool, servicioImagenes) {
         "/:id",
         upload.array("imagenes"),
         crearModificarProducto(pool, servicioImagenes)
+    );
+
+    // HU-21 - Dar de baja producto
+    router.delete(
+        "/:id",
+        crearDarDeBajaProducto(pool)
     );
 
     return router;
