@@ -1,0 +1,66 @@
+.acceso-social {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 16px 12px 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #1f2937;
+    box-sizing: border-box;
+}
+
+.acceso-social__texto {
+    margin: 0 0 8px 0;
+    font-size: 0.95rem;
+}
+
+.acceso-social__mensaje {
+    margin: 0 0 12px 0;
+    padding: 10px 12px;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    background-color: #fef2f2;
+    color: #991b1b;
+    font-size: 0.9rem;
+}
+
+.acceso-social__sesion {
+    padding: 10px 12px;
+    border: 1px solid #6ee7b7;
+    border-radius: 8px;
+    background-color: #ecfdf5;
+    color: #065f46;
+}
+
+.acceso-social__sesion .acceso-social__texto:last-child {
+    margin-bottom: 0;
+}
+
+.acceso-social__botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.acceso-social__boton {
+    display: inline-block;
+    padding: 10px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background-color: #ffffff;
+    color: #1f2937;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.acceso-social__boton:hover,
+.acceso-social__boton:focus-visible {
+    background-color: #f3f4f6;
+}
+
+.acceso-social__boton--google {
+    border-left: 4px solid #4285f4;
+}
+
+.acceso-social__boton--facebook {
+    border-left: 4px solid #1877f2;
+}

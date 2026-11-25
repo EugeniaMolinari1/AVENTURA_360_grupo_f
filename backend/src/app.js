@@ -6,9 +6,19 @@ const defaultPool = require("./db/database");
 const { crearRutasProductos } = require("./routes/productos.routes");
 const { crearRutasVariedades } = require("./routes/variedades.routes");
 const comprasProveedoresRoutes = require("./routes/comprasProveedores.routes");
+const { crearRutasAuth } = require("./routes/auth.routes");
+const {
+    leerConfiguracionAuth,
+    advertirConfiguracionAuth,
+} = require("./config/auth");
 
-function crearApp(pool = defaultPool, servicioImagenes) {
+function crearApp(pool = defaultPool, servicioImagenes, opcionesAuth) {
     const app = express();
+
+    // HU-06 - Registro con red social. Se monta antes del CORS general porque
+    // usa cookies y necesita CORS propio con credenciales (el comodin "*" no
+    // es compatible).
+    app.use("/api/auth", crearRutasAuth(pool, opcionesAuth));
 
     app.use(cors());
     app.use(express.json());
@@ -64,7 +74,10 @@ function crearApp(pool = defaultPool, servicioImagenes) {
 module.exports = { crearApp };
 
 if (require.main === module) {
-    const app = crearApp();
+    const configAuth = leerConfiguracionAuth();
+    advertirConfiguracionAuth(configAuth);
+
+    const app = crearApp(defaultPool, undefined, { config: configAuth });
     const PORT = process.env.PORT || 3001;
 
     app.listen(PORT, () => {

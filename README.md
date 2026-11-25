@@ -216,3 +216,148 @@ HTTP y elimina el esquema. No necesita Cloudinary. Cubren el validador, el alta
 correcta, las combinaciones de características, el stock por variedad, producto
 inexistente e inactivo, duplicados (mayúsculas, espacios y `NULL`), las restricciones
 propias de la base de datos y el rollback con reutilización del cliente.
+
+## Registro con una red social: HU-06
+
+El invitado se registra (o vuelve a ingresar) con **Google** o **Facebook**. No hay
+registro con contraseña. El backend controla todo el flujo OAuth 2.0 de código de
+autorización: el navegador solo es redirigido, y los secretos de las aplicaciones
+nunca salen del servidor.
+
+1. El frontend navega a `GET /api/auth/google` o `GET /api/auth/facebook`.
+2. El backend genera `state` (y `nonce` y PKCE en Google), los guarda en una cookie
+   firmada de 10 minutos y redirige al proveedor.
+3. El proveedor vuelve a `GET /api/auth/<proveedor>/callback`. El backend valida
+   `state`, intercambia el código con su secreto y **verifica la identidad**:
+   - Google: firma del ID token con las claves públicas de Google, emisor, audiencia,
+     vencimiento, `nonce` y `email_verified = true`.
+   - Facebook: consulta de Graph API (`/me`) con el token obtenido directamente de
+     Facebook y `appsecret_proof`.
+4. Si la identidad ya existe, se autentica a su usuario; si no, se crea el usuario con
+   rol `cliente` y su cuenta social, en una transacción. Nunca se vincula una
+   identidad nueva a un usuario existente por coincidir el correo: se rechaza con
+   `email_en_uso`.
+5. Se emite la sesión (JWT firmado, 7 días) en la cookie `a360_sesion`
+   (`HttpOnly`, `SameSite=Lax` y `Secure` cuando `NODE_ENV=production`) y se redirige
+   a `FRONTEND_URL/?auth=ok`.
+
+Ante cualquier fallo o cancelación se redirige a `FRONTEND_URL/?auth=error&motivo=...`
+sin crear sesión: el usuario continúa como invitado. Motivos: `cancelado`,
+`estado_invalido`, `sin_email`, `email_no_verificado`, `email_en_uso`,
+`datos_incompletos`, `proveedor_error`, `no_disponible` y `ya_autenticado`.
+Los datos de identidad salen solo de lo verificado con el proveedor, nunca de
+parámetros enviados por el cliente. Facebook sin correo no completa el registro.
+
+### Endpoints
+
+| Método y ruta | Descripción |
+| --- | --- |
+| `GET /api/auth/google`, `GET /api/auth/facebook` | Inicia la autenticación (redirige al proveedor). |
+| `GET /api/auth/google/callback`, `GET /api/auth/facebook/callback` | Los usa el proveedor; no se llaman a mano. |
+| `GET /api/auth/me` | Con sesión: `200` y `{ id_usuario, nombre, apellido, correo_electronico, rol }`. Sin sesión o inválida: `401` y `{ "errores": ["No autenticado."] }`. |
+
+No hay cierre de sesión en esta historia: para volver a ser invitado, borrar la
+cookie `a360_sesion` desde las herramientas del navegador.
+
+### Base de datos
+
+Ejecutar **una sola vez** `backend/src/db/sql/004_hu06_usuarios.sql` (no depende de
+los demás scripts). Desde la raíz del repositorio, en PowerShell:
+
+```powershell
+Get-Content -Raw backend/src/db/sql/004_hu06_usuarios.sql | docker compose exec -T postgres psql -U postgres -d aventura360 -v ON_ERROR_STOP=1
+```
+
+Crea `usuario` (`id_usuario`, `nombre`, `apellido`, `correo_electronico`, `dni`,
+`telefono`, `rol` con valores `cliente` o `administrador`) y `cuenta_social`
+(`id_cuenta_social`, `id_usuario`, `proveedor`, `id_proveedor`). El correo es único sin
+distinguir mayúsculas. Cada identidad `(proveedor, id_proveedor)` pertenece a un solo
+usuario, y un usuario tiene como máximo una cuenta por proveedor. La estructura
+admite vincular Google y Facebook a un mismo usuario, pero esa vinculación no está
+implementada. En `cuenta_social`, `id_proveedor` es el identificador del usuario en la
+red social, no el de los proveedores comerciales de la HU-28.
+
+### Variables de entorno (`backend/.env`)
+
+El archivo `.env` está ignorado por git. Nunca subir valores reales.
+
+| Variable | Descripción |
+| --- | --- |
+| `SESSION_SECRET` | Cadena aleatoria de al menos 32 caracteres. Generar con `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. |
+| `BACKEND_URL` | URL pública del backend (por defecto `http://localhost:3001`). |
+| `FRONTEND_URL` | URL del frontend (por defecto `http://localhost:5173`). Es el único destino de las redirecciones y el único origen CORS con credenciales de `/api/auth`. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Credenciales de Google. |
+| `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` | Credenciales de Meta. |
+| `FACEBOOK_GRAPH_VERSION` | Versión de Graph API (por defecto `v23.0`). Verificar que siga vigente. |
+
+Lo que no esté configurado se deshabilita sin afectar al resto de la API (el botón
+correspondiente redirige con `motivo=no_disponible`). El frontend usa
+`VITE_API_URL` (por defecto `http://localhost:3001/api`).
+
+### Configurar Google
+
+1. En [Google Cloud Console](https://console.cloud.google.com/), crear un proyecto.
+2. En **APIs y servicios → Pantalla de consentimiento de OAuth**: tipo de usuario
+   *Externo*, estado *En pruebas*, y agregar como *usuarios de prueba* los correos
+   de quienes van a probar. Alcances: `openid`, `email` y `profile`.
+3. En **Credenciales → Crear credenciales → ID de cliente de OAuth**: tipo
+   *Aplicación web*.
+4. En *URI de redirección autorizados* agregar exactamente
+   `http://localhost:3001/api/auth/google/callback`.
+5. Copiar el ID y el secreto del cliente a `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+
+### Configurar Facebook
+
+1. En [Meta for Developers](https://developers.facebook.com/), crear una app y
+   agregar el producto **Facebook Login**.
+2. En *Facebook Login → Configuración* agregar como *URI de redireccionamiento de OAuth
+   válidos* exactamente `http://localhost:3001/api/auth/facebook/callback`.
+3. Permisos usados: `public_profile` y `email`.
+4. La app queda en modo *Desarrollo*: solo pueden ingresar quienes tengan un rol en
+   la app (administradores, desarrolladores o testers). Agregar a quienes prueben en
+   **Roles de la app**. Pasar a modo público exige requisitos de Meta y no es necesario.
+5. Copiar el ID y el secreto de la app (*Configuración → Básica*) a `FACEBOOK_APP_ID` y
+   `FACEBOOK_APP_SECRET`.
+
+### Pruebas automáticas
+
+`npm test` desde `backend` ejecuta también:
+
+- `test/auth.proveedores.test.js` y `test/auth.sesion.test.js`: no necesitan base de
+  datos. Verifican la validación de ID tokens de Google con claves generadas en la
+  prueba (firma, emisor, audiencia, vencimiento, `nonce`, correo), el adaptador de
+  Facebook, la sesión, la configuración y los validadores.
+- `test/auth.test.js`: crea un esquema aislado, carga solo `004` y recorre el flujo
+  completo por HTTP con proveedores simulados: registro con Google y Facebook, rol
+  `cliente`, identidades repetidas y simultáneas, correo en uso, `state` inválido,
+  cancelaciones, errores, `/api/auth/me`, cookies, CORS y restricciones de la base.
+
+**Estas pruebas no equivalen a verificar la autenticación real**: los proveedores están
+simulados. Falta la prueba manual con cuentas reales de Google y Facebook.
+
+### Prueba manual con los proveedores reales
+
+1. Aplicar `004` (arriba) y completar `backend/.env` con las credenciales.
+2. Iniciar el backend (`npm run dev` en `backend`) y el frontend (`npm run dev` en
+   `frontend`, que usa el puerto 5173).
+3. Abrir `http://localhost:5173` en una ventana sin sesión. Debe verse "Registrate o
+   ingresá con tu red social" con los dos botones.
+4. **Google, registro**: pulsar *Continuar con Google* y elegir una cuenta de prueba.
+   Debe volver a la aplicación con "¡Registro completado!" y la sesión iniciada con
+   rol `cliente`. Verificar en la base: `SELECT * FROM usuario;` y
+   `SELECT * FROM cuenta_social;` (una fila en cada tabla).
+5. Recargar: la sesión se mantiene. `http://localhost:3001/api/auth/me` en el
+   navegador devuelve los datos del usuario.
+6. Borrar la cookie `a360_sesion` (herramientas del navegador → Aplicación →
+   Cookies) y repetir con la misma cuenta: no debe crear usuarios nuevos.
+7. **Cancelación**: pulsar el botón y cancelar en la pantalla del proveedor. Debe
+   mostrar "Cancelaste el proceso…" y seguir como invitado, sin filas nuevas.
+8. **Facebook, registro**: repetir con *Continuar con Facebook* usando una cuenta con
+   rol en la app y con correo. Debe crear otro usuario independiente.
+9. **Correo ya usado**: con Facebook, ingresar con una cuenta cuyo correo coincida con
+   el de la cuenta de Google ya registrada. Debe rechazar con "ya está asociado a otra
+   cuenta" y no crear ni vincular nada.
+10. **Facebook sin correo**: si se dispone de una cuenta sin correo (o negando el
+    permiso de correo), debe mostrar el mensaje de correo obligatorio y no crear nada.
+11. Comprobar en las herramientas del navegador que la cookie `a360_sesion` es
+    `HttpOnly` y `SameSite=Lax`, y que no hay tokens en la URL final.
