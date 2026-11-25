@@ -7,6 +7,7 @@ const {
     crearDarDeBajaProducto,
     crearObtenerCatalogo,
     crearBuscarProductos,
+    crearObtenerDetalleProducto,
 } = require("../controllers/productos.controller");
 
 const upload =
@@ -38,6 +39,12 @@ function crearRutasProductos(
     router.get(
         "/buscar",
         crearBuscarProductos(pool)
+    );
+
+    // HU-05 - Consultar detalle de un producto
+    router.get(
+        "/:id/detalle",
+        crearObtenerDetalleProducto(pool)
     );
 
     // HU-20 - Obtener producto para cargar sus datos

@@ -809,6 +809,130 @@ async function buscarProductos(pool, criterio) {
     );
 }
 
+async function obtenerDetalleProducto(pool, idProducto) {
+    const cliente = await pool.connect();
+
+    try {
+        const {
+            rows: [producto],
+        } = await cliente.query(
+            `SELECT
+                id_producto,
+                nombre,
+                descripcion,
+                marca,
+                precio,
+                dimensiones
+             FROM producto
+             WHERE id_producto = $1
+               AND activo = TRUE`,
+            [idProducto]
+        );
+
+        if (!producto) {
+            return null;
+        }
+
+        const tipo = await detectarTipoProducto(
+            cliente,
+            idProducto
+        );
+
+        if (!tipo) {
+            throw new Error(
+                "El producto no posee un subtipo valido."
+            );
+        }
+
+        const {
+            rows: [detalle],
+        } = await cliente.query(
+            `SELECT *
+             FROM ${tipo}
+             WHERE id_producto = $1`,
+            [idProducto]
+        );
+
+        const detalleLimpio = {
+            ...detalle,
+        };
+
+        delete detalleLimpio.id_producto;
+
+        const ocasiones = await cliente.query(
+            `SELECT o.nombre
+             FROM producto_ocasion po
+             JOIN ocasion o
+               ON o.id_ocasion = po.id_ocasion
+             WHERE po.id_producto = $1
+             ORDER BY o.id_ocasion`,
+            [idProducto]
+        );
+
+        const imagenes = await cliente.query(
+            `SELECT
+                id_imagen,
+                url,
+                principal
+             FROM imagen
+             WHERE id_producto = $1
+             ORDER BY principal DESC, id_imagen`,
+            [idProducto]
+        );
+
+        const variedades = await cliente.query(
+            `SELECT
+                id_variedad,
+                color,
+                medida,
+                tamano_capacidad,
+                stock,
+                stock_minimo
+             FROM variedad
+             WHERE id_producto = $1
+             ORDER BY id_variedad`,
+            [idProducto]
+        );
+
+        const variedadesPublicas =
+            variedades.rows.map((variedad) => {
+                let estadoStock = "disponible";
+
+                if (variedad.stock === 0) {
+                    estadoStock = "sin_stock";
+                } else if (
+                    variedad.stock <=
+                    variedad.stock_minimo
+                ) {
+                    estadoStock = "stock_bajo";
+                }
+
+                return {
+                    id_variedad:
+                        variedad.id_variedad,
+                    color: variedad.color,
+                    medida: variedad.medida,
+                    tamano_capacidad:
+                        variedad.tamano_capacidad,
+                    stock: variedad.stock,
+                    estado_stock: estadoStock,
+                };
+            });
+
+        return {
+            ...producto,
+            tipo,
+            detalle: detalleLimpio,
+            ocasiones: ocasiones.rows.map(
+                (ocasion) => ocasion.nombre
+            ),
+            imagenes: imagenes.rows,
+            variedades: variedadesPublicas,
+        };
+    } finally {
+        cliente.release();
+    }
+}
 module.exports = {
     registrarProducto,
     obtenerProductoPorId,
@@ -816,4 +940,5 @@ module.exports = {
     darDeBajaProducto,
     obtenerCatalogo,
     buscarProductos,
+    obtenerDetalleProducto,
 };
